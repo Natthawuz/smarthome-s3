@@ -15,7 +15,9 @@
   วิธีใช้ (ผ่าน Serial Monitor 115200):
   1. ตอนเปิดเครื่อง จะถามว่าจะลบใบหน้าที่เคยบันทึกไว้ทั้งหมดไหม / จะแสดงรายชื่อที่บันทึกไว้ไหม
   2. เอาหน้าเข้ากล้อง รอจนเจอใบหน้า จะถามว่า "enroll" (บันทึกใหม่) หรือ "recognize" (จำแนก)
-     - พิมพ์ e แล้ว Enter เพื่อบันทึกใบหน้าใหม่ (ต้องใส่ชื่อ) — แนะนำให้ enroll คนเดิม 2-3 ครั้ง มุมต่างกันเล็กน้อย
+     - พิมพ์ e แล้ว Enter เพื่อบันทึกใบหน้าใหม่ ใส่ชื่อครั้งเดียว แล้วใส่จำนวนรูปที่จะเทรน
+       (แนะนำ 10-15 รูป) ระบบจะถามให้ขยับมุมหน้า/แสง/ระยะห่างเล็กน้อยแล้วกด Enter ถ่ายทีละรูป
+       จนครบจำนวน — ยิ่งรูปเยอะ/มุมหลากหลาย ยิ่งแม่นและปัดคนแปลกหน้าได้เด็ดขาดขึ้น
      - พิมพ์ r แล้ว Enter เพื่อให้ระบบลองจำแนกว่าใบหน้านี้คือใคร ถ้าจำได้ servo จะปลดล็อกให้อัตโนมัติ
 -----------------------------------------------------------
 */
@@ -62,7 +64,15 @@ void setup() {
   detection.confidence(0.7);
 
   // ค่าความมั่นใจขั้นต่ำก่อนจะถือว่า "จำได้" ว่าเป็นคนที่เคย enroll ไว้
-  recognition.confidence(0.85);
+  // เพิ่มจาก 0.85 เป็น 0.93 หลังพบว่า 0.85 หลวมเกินไป — คนที่ไม่เคย enroll เลย
+  // ถูกจำผิดเป็นคนที่ enroll ไว้แล้ว (false positive)
+  // ลองเพิ่มเป็น 0.95 (2026-08-01) แต่ทดสอบจริงพบว่าหน้าคนที่ enroll เองสแกนได้แค่
+  // ~0.93 บางครั้ง (แกว่งตามแสง/มุม/ระยะห่าง) ทำให้ถูกปัดเป็น unknown ทั้งที่เป็นคนจริง
+  // ทดสอบเพิ่มเติมพบว่าแม้มุมกล้อง frontal ที่ดีที่สุด ก็ยังได้แค่ ~0.90 (ยิ่งมุมเอียง
+  // ยิ่งลดลง 0.90->0.63 ตามมุมที่เบี้ยวออก) เกณฑ์ 0.93 จึงสูงเกินจริงสำหรับข้อมูลชุดนี้
+  // ปรับลงเป็น 0.87 (ต่ำกว่าค่าดีที่สุดที่วัดได้จริงเล็กน้อย เผื่อความแกว่งปกติ) — ต้อง
+  // ใช้งาน/ทดสอบด้วยมุมกล้องแบบ frontal (ยืนตรงหน้ากล้อง) เท่านั้นถึงจะแม่นยำดี
+  recognition.confidence(0.87);
 
   while (!camera.begin().isOk())
     Serial.println(camera.exception.toString());
@@ -127,13 +137,44 @@ String prompt(String message) {
   return answer;
 }
 
+// Enroll แบบหลายรูปติดกันโดยไม่ต้องพิมพ์ชื่อซ้ำทุกรอบ — ไว้เทรนคนเดียวด้วยรูปจำนวนมาก
+// (แนะนำ 10-15 รูป มุมหน้า/แสง/ระยะห่างต่างกันเล็กน้อยทุกรูป) ให้ความมั่นใจแม่นขึ้น
+// และแยกแยะคนแปลกหน้าได้เด็ดขาดขึ้น (ดูคอมเมนต์ recognition.confidence() ด้านบน)
 void enroll() {
   String name = prompt("ใส่ชื่อคนที่จะบันทึก:");
+  int count = prompt("ต้องการบันทึกกี่รูป? (แนะนำ 10-15 รูป มุมหน้า/แสงต่างกันเล็กน้อยทุกรูป)").toInt();
+  if (count <= 0) count = 1;
 
-  if (recognition.enroll(name).isOk())
-    Serial.println("บันทึกสำเร็จ!");
-  else
-    Serial.println(recognition.exception.toString());
+  int saved = 0;
+  for (int i = 1; i <= count; i++) {
+    if (i > 1) {
+      // ใช้ prompt() ไม่ได้ตรงนี้ เพราะ prompt() บังคับว่าต้องได้คำตอบไม่ว่างเปล่า
+      // (วนถามซ้ำถ้า answer ว่าง) แต่ที่นี่แค่ต้องการ "กด Enter เฉยๆ" ซึ่งส่งบรรทัดว่าง
+      // มา ทำให้ prompt() ค้างวนถามซ้ำไม่รู้จบ — รอรับ Enter ตรงๆ แทน
+      Serial.println("รูปที่ " + String(i) + "/" + String(count) + " — ขยับมุมหน้า/ระยะห่างเล็กน้อยแล้วกด Enter เพื่อถ่าย");
+      while (!Serial.available())
+        delay(1);
+      Serial.readStringUntil('\n');
+
+      if (!camera.capture().isOk()) {
+        Serial.println(camera.exception.toString());
+        i--;
+        continue;
+      }
+      // ไม่เรียก recognition.detect() ซ้ำตรงนี้ — enroll() เช็คหน้าในเฟรมเองอยู่แล้ว
+      // (เรียก detect() ซ้ำก่อนหน้านี้ทำให้ค้าง ไม่ผ่านทุกรอบตั้งแต่รูปที่ 2 เป็นต้นไป)
+    }
+
+    if (recognition.enroll(name).isOk()) {
+      Serial.printf(">>> บันทึกรูปที่ %d/%d สำเร็จ (%s) <<<\n", i, count, name.c_str());
+      saved++;
+    } else {
+      Serial.println(recognition.exception.toString());
+      i--;
+    }
+  }
+
+  Serial.printf(">>> เสร็จสิ้น: บันทึกสำเร็จ %d/%d รูป สำหรับ \"%s\" <<<\n", saved, count, name.c_str());
 }
 
 void recognize() {
@@ -148,7 +189,17 @@ void recognize() {
       recognition.match.similarity,
       recognition.benchmark.millis());
 
-  unlockDoor();
+  // recognize().isOk() คืน true เสมอแม้จำไม่ได้จริง (name จะเป็น "unknown")
+  // ต้องเช็คเองว่าชื่อไม่ใช่ unknown และความมั่นใจถึงเกณฑ์ที่ตั้งไว้จริง
+  // (ตรงกับที่แก้ไว้แล้วใน phase4_face_scan_door.cpp)
+  bool isKnownPerson = recognition.match.name != "unknown" &&
+                        recognition.match.similarity >= 0.87;
+
+  if (isKnownPerson) {
+    unlockDoor();
+  } else {
+    Serial.println(">>> ไม่รู้จักคนนี้ ไม่ปลดล็อก <<<");
+  }
 }
 
 void unlockDoor() {

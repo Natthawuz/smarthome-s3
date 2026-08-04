@@ -237,7 +237,11 @@ void setup() {
 
   detection.accurate();
   detection.confidence(0.7);
-  recognition.confidence(0.85);
+  // เพิ่มจาก 0.85 เป็น 0.93 หลังพบว่า 0.85 หลวมเกินไป (คนที่ไม่เคย enroll ถูกจำผิด)
+  // ทดสอบเพิ่มเติม (2026-08-01) พบว่าแม้มุมกล้อง frontal ที่ดีที่สุดก็ได้แค่ ~0.90
+  // ปรับลงเป็น 0.87 (ต่ำกว่าค่าดีที่สุดที่วัดได้จริงเล็กน้อย) — ต้องใช้งานด้วยมุมกล้อง
+  // แบบ frontal เท่านั้นถึงจะแม่นยำดี
+  recognition.confidence(0.87);
 
   while (!camera.begin().isOk())
     Serial.println(camera.exception.toString());
@@ -302,7 +306,7 @@ void loop() {
   // recognize().isOk() คืน true เสมอแม้จำไม่ได้ (name จะเป็น "unknown")
   // ต้องเช็คชื่อ + ค่าความมั่นใจเองว่าผ่านเกณฑ์จริงก่อนสั่งปลดล็อก
   bool isKnownPerson = recognition.match.name != "unknown" &&
-                        recognition.match.similarity >= 0.85;
+                        recognition.match.similarity >= 0.87;
 
   xSemaphoreTake(statusMutex, portMAX_DELAY);
   strncpy(lastStatusName, recognition.match.name.c_str(), sizeof(lastStatusName) - 1);

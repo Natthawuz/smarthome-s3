@@ -4,3 +4,8 @@
 .vscode/launch.json
 .vscode/ipch
 include/wifi_credentials.h
+dataset/
+dataset_old_v1_unreliable/
+train_env/
+.DS_Store
+

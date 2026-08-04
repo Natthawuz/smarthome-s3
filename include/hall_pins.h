@@ -12,3 +12,4 @@
 #define SERVO_PIN    14  // Servo SG92R (PWM)
 #define MPU_SDA_PIN  21  // MPU-6050 I2C SDA
 #define MPU_SCL_PIN  47  // MPU-6050 I2C SCL
+#define EARTHQUAKE_BUZZER_PIN 2  // ใช้ขาเดียวกับ phase5d/phase7 (เฟสแยกกัน ไม่รันพร้อมกัน)
